@@ -1,0 +1,92 @@
+services:
+  vote:
+    build: ./vote
+    ports:
+      - "8080:80"
+    environment:
+      - REDIS_HOST=redis
+      - OPTION_A=Café
+      - OPTION_B=Té
+      - DATABASE_HOST=database
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_NAME=votes
+    networks:
+      - voting
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: ./worker
+    ports:
+      - "5002:3000"
+    environment:
+      - REDIS_HOST=redis
+      - DATABASE_HOST=database
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_NAME=votes
+    networks:
+      - voting
+    depends_on:
+      redis:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+
+  result:
+    build: ./result
+    ports:
+      - "5001:3000"
+    environment:
+      - DATABASE_HOST=database
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_NAME=votes
+      - APP_PORT=3000
+    networks:
+      - voting
+    depends_on:
+      database:
+        condition: service_healthy
+
+  redis:
+    image: redis:6
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - voting
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  database:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=votes
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - voting
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d votes"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+networks:
+  voting:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
